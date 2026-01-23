@@ -1,0 +1,43 @@
+# CI (Continuous Integration)
+# Chạy tự động khi dev push code hoặc tạo/cập nhật Pull Request.
+# Mục tiêu: build/test để phát hiện lỗi sớm.
+
+name: CI - Laravel Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Setup .env
+        shell: bash
+        run: |
+          if [ -f .env.example ] && [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+          php artisan key:generate --force
+
+      - name: Run tests
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ":memory:"
+          CACHE_DRIVER: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+        run: php artisan test
