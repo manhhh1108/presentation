@@ -1,7 +1,3 @@
-# CD (Continuous Delivery/Deployment)
-# Chỉ chạy sau khi PR được MERGE vào nhánh main.
-# Mục tiêu: dev thấy "merge là auto deploy production".
-
 name: CD - Deploy to Render (Production)
 
 on:
