@@ -3,7 +3,9 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "build:pages": "vite build --config vite.pages.config.js",
+        "dev": "vite",
+        "start": "serve dist -l 5000"
     },
     "devDependencies": {
         "autoprefixer": "^10.4.20",

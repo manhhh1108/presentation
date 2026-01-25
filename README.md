@@ -21,6 +21,24 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## CI/CD Demo
+
+This repository demos CI + CD using GitHub Actions.
+
+- **CI**: runs Laravel tests and builds a static demo site.
+- **CD**: deploys the static demo site to **GitHub Pages** on every push to `main`.
+
+### GitHub Pages
+
+The Pages site is built from the `pages/` folder using Vite (see `vite.pages.config.js`) and deployed by the workflow in `.github/workflows/cd-pages.yml`.
+
+To enable Pages in GitHub:
+
+1. Repo **Settings → Pages**
+2. **Source**: select **GitHub Actions**
+
+After that, merge/push to `main` to trigger deployment.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
