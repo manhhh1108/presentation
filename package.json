@@ -5,13 +5,16 @@
         "build": "vite build",
         "build:pages": "vite build --config vite.pages.config.js",
         "dev": "vite",
-        "start": "serve dist -l 5000"
+        "start": "serve dist -l 5000",
+        "watch:pages": "nodemon --watch pages --ext html,js,css --exec \"npm run build:pages\"",
+        "dev:pages": "vite --config vite.pages.config.js"
     },
     "devDependencies": {
         "autoprefixer": "^10.4.20",
         "axios": "^1.7.4",
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^1.2.0",
+        "nodemon": "^3.1.11",
         "postcss": "^8.4.47",
         "tailwindcss": "^3.4.13",
         "vite": "^6.0.11"
