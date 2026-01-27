@@ -30,17 +30,15 @@ jobs:
       - name: Trigger EC2 Deploy via SSM
         id: trigger
         run: |
-          echo "Triggering deployment on EC2..."
+          COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
+          ARTIFACT="s3://${{ secrets.S3_BUCKET }}/presentation/deploy-${COMMIT_SHA}.zip"
+          REMOTE_CMD="set -e; aws s3 cp ${ARTIFACT} /tmp/deploy.zip; sudo unzip -o /tmp/deploy.zip -d /var/www/presentation"
+
           COMMAND_ID=$(aws ssm send-command \
-            --document-name "${{ secrets.SSM_DOCUMENT_NAME }}" \
+            --document-name "AWS-RunShellScript" \
             --targets "Key=tag:Environment,Values=Production" \
-            --parameters "commitSha=${{ github.event.workflow_run.head_sha }},s3Bucket=${{ secrets.S3_BUCKET }},appPath=/var/www/presentation" \
-            --cloud-watch-output-config '{"CloudWatchOutputEnabled":true, "CloudWatchLogGroupName":"/aws/ssm/presentation-deploy"}' \
-            --comment "Deploying commit ${{ github.event.workflow_run.head_sha }}" \
-            --query 'Command.CommandId' \
-            --output text)
-          
-          echo "SSM Command ID: $COMMAND_ID"
+            --parameters commands="$REMOTE_CMD" \
+            --query 'Command.CommandId' --output text)
           echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
 
       - name: Wait for deployment
