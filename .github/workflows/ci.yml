@@ -90,8 +90,8 @@ jobs:
       - name: Upload artifact to S3
         run: |
           aws s3 cp deploy-${{ github.sha }}.zip \
-            s3://${{ secrets.S3_BUCKET }}/presentation/deploy-${{ github.sha }}.zip \
+            s3://${{ secrets.S3_BUCKET }}/presentation/source-${{ github.sha }}.zip \
             --metadata "branch=${{ github.ref_name }},commit=${{ github.sha }},workflow=${{ github.run_id }}"
           
           echo "Artifact uploaded to S3"
-          echo "s3://${{ secrets.S3_BUCKET }}/presentation/deploy-${{ github.sha }}.zip"
+          echo "s3://${{ secrets.S3_BUCKET }}/presentation/source-${{ github.sha }}.zip"
