@@ -50,54 +50,21 @@ jobs:
           
           # Poll for command status
           for i in {1..60}; do
-            INVOCATION_COUNT=$(aws ssm list-command-invocations \
-              --command-id ${{ steps.trigger.outputs.command_id }} \
-              --query 'length(CommandInvocations)' \
-              --output text 2>/dev/null || echo "0")
-
-            if [ "$INVOCATION_COUNT" = "0" ] || [ "$INVOCATION_COUNT" = "None" ]; then
-              echo "No command invocations yet (attempt $i/60)." 
-              echo "Common causes: no EC2 matches tag Environment=Production, or instance is not an SSM managed instance." 
-              aws ssm list-commands \
-                --command-id ${{ steps.trigger.outputs.command_id }} \
-                --query 'Commands[0].{Status:Status,StatusDetails:StatusDetails,RequestedDateTime:RequestedDateTime,DocumentName:DocumentName,Targets:Targets}' \
-                --output yaml || true
-              sleep 10
-              continue
-            fi
-
             STATUS=$(aws ssm list-commands \
               --command-id ${{ steps.trigger.outputs.command_id }} \
               --query 'Commands[0].Status' \
               --output text 2>/dev/null || echo "Pending")
 
-            echo "Status: $STATUS (attempt $i/60, invocations=$INVOCATION_COUNT)"
+            echo "Status: $STATUS (attempt $i/60)"
             
             if [ "$STATUS" = "Success" ]; then
               echo "Deployment completed successfully!"
               exit 0
             elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
               echo "Deployment failed with status: $STATUS"
-              
-              echo "Invocation summary:"
-              aws ssm list-command-invocations \
-                --command-id ${{ steps.trigger.outputs.command_id }} \
-                --details \
-                --query 'CommandInvocations[].{InstanceId:InstanceId,Status:Status,StatusDetails:StatusDetails}' \
-                --output table || true
-
-              echo "Plugin output (first plugin per instance):"
-              aws ssm list-command-invocations \
-                --command-id ${{ steps.trigger.outputs.command_id }} \
-                --details \
-                --query 'CommandInvocations[].{InstanceId:InstanceId,Plugin:CommandPlugins[0].Name,ResponseCode:CommandPlugins[0].ResponseCode,Output:CommandPlugins[0].Output}' \
-                --output yaml || true
-              
               exit 1
             fi
-            
             sleep 10
           done
-          
           echo "Deployment timed out"
           exit 1
