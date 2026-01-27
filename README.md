@@ -21,38 +21,57 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-## CI/CD Demo - GitHub Actions → EC2
+## CI/CD Demo - GitHub Actions → S3 → EC2
 
-This repository demonstrates a complete CI/CD pipeline using GitHub Actions to automatically deploy a Laravel application to EC2.
+This repository demonstrates a complete CI/CD pipeline using GitHub Actions with AWS S3 and Systems Manager for secure, scalable deployment.
 
 ### Architecture
 
 **CI Workflow** (`.github/workflows/ci.yml`)
-- Runs on every push/PR
+- Runs on every push/PR to `main`
 - Executes Laravel unit tests with SQLite
 - Builds assets (Vite + static pages)
-- Creates deployment artifact
-- Uploads artifact for CD workflow
+- Creates deployment artifact (zip)
+- Uploads to **S3** using AWS OIDC (no static credentials!)
 
 **CD Workflow** (`.github/workflows/cd-ec2.yml`)
 - Triggers automatically when CI completes on `main` branch
-- Downloads deployment artifact
-- Deploys to EC2 via SSH
+- Uses **AWS Systems Manager (SSM)** to send deploy command
+- EC2 downloads artifact from S3
 - Runs migrations and optimization
-- Zero manual intervention
+- No SSH keys needed!
+
+### Flow
+
+```
+Git push main
+    ↓
+GitHub Actions CI (OIDC auth)
+    ↓
+Build + Upload to S3
+    ↓
+SSM Send Command
+    ↓
+EC2 downloads from S3
+    ↓
+Deploy Laravel App
+```
 
 ### Quick Start
 
-See complete demo guide: **[docs/CICD-DEMO.md](docs/CICD-DEMO.md)**
+See complete setup guide: **[docs/AWS-OIDC-SETUP.md](docs/AWS-OIDC-SETUP.md)**
 
 **Prerequisites:**
-1. EC2 instance with PHP 8.2+, Composer, and web server
-2. SSH key pair for deployment
-3. GitHub Secrets configured:
-   - `EC2_HOST` - EC2 public IP/DNS
-   - `EC2_USER` - SSH username (e.g., `ubuntu`)
-   - `EC2_SSH_KEY` - Private SSH key
-   - `EC2_APP_PATH` - Deploy path (e.g., `/var/www/presentation`)
+1. AWS account with OIDC identity provider configured
+2. S3 bucket for artifacts
+3. EC2 instance with SSM agent + IAM role
+4. SSM Document for deployment script
+5. GitHub Secrets configured:
+   - `AWS_ACCOUNT_ID`
+   - `AWS_REGION`
+   - `S3_BUCKET`
+   - `SSM_DOCUMENT_NAME`
+   - `EC2_INSTANCE_ID`
 
 **To demo:**
 ```bash
@@ -64,10 +83,16 @@ git add .
 git commit -m "test: trigger deployment"
 git push origin main
 
-# Watch GitHub Actions tab for real-time progress
+# Watch GitHub Actions + CloudWatch logs
 ```
 
-The application will automatically deploy to your EC2 instance!
+### Why this approach?
+
+✅ **No SSH keys** - SSM Session Manager instead  
+✅ **Secure** - OIDC replaces static AWS credentials  
+✅ **Traceable** - CloudWatch logs every deployment  
+✅ **Scalable** - SSM can target multiple EC2 instances  
+✅ **Easy rollback** - Artifacts versioned in S3
 
 ## Learning Laravel
 

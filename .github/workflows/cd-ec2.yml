@@ -17,82 +17,65 @@ jobs:
     name: Deploy to EC2
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    env:
-      EC2_HOST: ${{ secrets.EC2_HOST }}
-      EC2_USER: ${{ secrets.EC2_USER }}
-      EC2_PORT: ${{ secrets.EC2_PORT || '22' }}
-      EC2_APP_PATH: ${{ secrets.EC2_APP_PATH }}
+    permissions:
+      id-token: write
+      contents: read
     steps:
-      - name: Download deployment artifact
-        uses: actions/download-artifact@v4
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: deploy-package-${{ github.event.workflow_run.head_sha }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub-Deploy-Role
+          aws-region: ${{ secrets.AWS_REGION || 'ap-northeast-1' }}
 
-      - name: Setup SSH
-        shell: bash
+      - name: Trigger EC2 Deploy via SSM
+        id: trigger
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -p "$EC2_PORT" -H "$EC2_HOST" >> ~/.ssh/known_hosts
-
-      - name: Upload package to server
-        shell: bash
-        run: |
-          scp -P "$EC2_PORT" deploy.tgz "$EC2_USER@$EC2_HOST:/tmp/deploy-${{ github.event.workflow_run.head_sha }}.tgz"
-
-      - name: Deploy on server
-        shell: bash
-        run: |
-          ssh -p "$EC2_PORT" "$EC2_USER@$EC2_HOST" << 'ENDSSH'
-          set -euo pipefail
-
-          APP_PATH="${{ secrets.EC2_APP_PATH }}"
-          DEPLOY_PKG="/tmp/deploy-${{ github.event.workflow_run.head_sha }}.tgz"
-
-          echo "Deploying to $APP_PATH..."
-
-          # Create app directory if not exists
-          mkdir -p "$APP_PATH"
-
-          # Extract package
-          tar -xzf "$DEPLOY_PKG" -C "$APP_PATH"
-          rm -f "$DEPLOY_PKG"
-
-          cd "$APP_PATH"
-
-          # Install production dependencies
-          echo "Installing dependencies..."
-          composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
-
-          # Run migrations
-          echo "Running migrations..."
-          php artisan migrate --force
-
-          # Clear and cache
-          echo "Optimizing application..."
-          php artisan optimize:clear || true
-          php artisan config:cache
-          php artisan route:cache || true
-          php artisan view:cache || true
-          php artisan event:cache || true
+          echo "Triggering deployment on EC2..."
+          COMMAND_ID=$(aws ssm send-command \
+            --document-name "${{ secrets.SSM_DOCUMENT_NAME }}" \
+            --targets "Key=tag:Environment,Values=Production" \
+            --parameters "commitSha=${{ github.event.workflow_run.head_sha }},s3Bucket=${{ secrets.S3_BUCKET }},appPath=/var/www/presentation" \
+            --cloud-watch-output-config '{"CloudWatchOutputEnabled":true, "CloudWatchLogGroupName":"/aws/ssm/presentation-deploy"}' \
+            --comment "Deploying commit ${{ github.event.workflow_run.head_sha }}" \
+            --query 'Command.CommandId' \
+            --output text)
           
-          # Create storage link
-          php artisan storage:link || true
+          echo "SSM Command ID: $COMMAND_ID"
+          echo "command_id=$COMMAND_ID" >> $GITHUB_OUTPUT
 
-          # Set permissions (adjust as needed)
-          chmod -R 775 storage bootstrap/cache
-          
-          echo "Deployment completed successfully!"
-          ENDSSH
-
-      - name: Deployment notification
-        if: always()
+      - name: Wait for deployment
         run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Deployment to EC2 successful!"
-          else
-            echo "❌ Deployment to EC2 failed!"
-          fi
+          echo "Waiting for deployment to complete..."
+          sleep 10
+          
+          # Poll for command status
+          for i in {1..60}; do
+            STATUS=$(aws ssm list-command-invocations \
+              --command-id ${{ steps.trigger.outputs.command_id }} \
+              --details \
+              --query 'CommandInvocations[0].Status' \
+              --output text 2>/dev/null || echo "Pending")
+            
+            echo "Status: $STATUS (attempt $i/60)"
+            
+            if [ "$STATUS" = "Success" ]; then
+              echo "Deployment completed successfully!"
+              exit 0
+            elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
+              echo "Deployment failed with status: $STATUS"
+              
+              # Get error output
+              aws ssm list-command-invocations \
+                --command-id ${{ steps.trigger.outputs.command_id }} \
+                --details \
+                --query 'CommandInvocations[0].CommandPlugins[0].Output' \
+                --output text || true
+              
+              exit 1
+            fi
+            
+            sleep 10
+          done
+          
+          echo "Deployment timed out"
+          exit 1

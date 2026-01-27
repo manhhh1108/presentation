@@ -17,6 +17,9 @@ jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -68,18 +71,27 @@ jobs:
       - name: Build static pages
         run: npm run build:pages
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub-Deploy-Role
+          aws-region: ${{ secrets.AWS_REGION || 'ap-northeast-1' }}
+
       - name: Package deployment artifact
         run: |
-          tar -czf deploy.tgz \
+          echo "Creating deployment package..."
+          zip -r deploy-${{ github.sha }}.zip \
             app bootstrap config database public resources routes \
             composer.json composer.lock package.json phpunit.xml \
             vite.config.js vite.pages.config.js tailwind.config.js postcss.config.js \
-            artisan server.js
+            artisan server.js \
+            -x "*.git*" "tests/*" "node_modules/*"
 
-      - name: Upload deployment artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deploy-package-${{ github.sha }}
-          path: deploy.tgz
-          retention-days: 7
-          if-no-files-found: error
+      - name: Upload artifact to S3
+        run: |
+          aws s3 cp deploy-${{ github.sha }}.zip \
+            s3://${{ secrets.S3_BUCKET }}/presentation/deploy-${{ github.sha }}.zip \
+            --metadata "branch=${{ github.ref_name }},commit=${{ github.sha }},workflow=${{ github.run_id }}"
+          
+          echo "Artifact uploaded to S3"
+          echo "s3://${{ secrets.S3_BUCKET }}/presentation/deploy-${{ github.sha }}.zip"
