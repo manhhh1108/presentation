@@ -68,22 +68,18 @@ jobs:
       - name: Build static pages
         run: npm run build:pages
 
-      - name: Package deployment artifact
-        run: |
-          tar \
-            --exclude=.git \
-            --exclude=.github \
-            --exclude=node_modules \
-            --exclude=vendor \
-            --exclude=storage \
-            --exclude=.env \
-            --exclude=deploy.tgz \
-            -czf deploy.tgz .
+      # - name: Package deployment artifact
+      #   run: |
+      #     tar -czf deploy.tgz \
+      #       app bootstrap config database public resources routes \
+      #       composer.json composer.lock package.json phpunit.xml \
+      #       vite.config.js vite.pages.config.js tailwind.config.js postcss.config.js \
+      #       artisan server.js
 
-      - name: Upload deployment artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deploy-package-${{ github.sha }}
-          path: deploy.tgz
-          retention-days: 7
-          if-no-files-found: error
+      # - name: Upload deployment artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: deploy-package-${{ github.sha }}
+      #     path: deploy.tgz
+      #     retention-days: 7
+      #     if-no-files-found: error
