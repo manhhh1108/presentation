@@ -32,8 +32,18 @@ jobs:
         run: |
           VERSION="${{ github.event.workflow_run.head_sha }}"
 
+          DOC_NAME="${{secrets.SSM_DOCUMENT_NAME}}"
+          if [ -z "$DOC_NAME" ]; then
+            echo "Missing SSM document name. Set secret SSM_DOCUMENT_NAME." >&2
+            exit 1
+          fi
+
+          echo "Using SSM document: $DOC_NAME"
+          echo "Target: tag Environment=Production"
+          echo "Version: $VERSION"
+
           COMMAND_ID=$(aws ssm send-command \
-            --document-name "Exment-Deploy-Prod-Doc" \
+            --document-name "$DOC_NAME" \
             --targets "Key=tag:Environment,Values=Production" \
             --parameters "version=$VERSION" \
             --cloud-watch-output-config '{"CloudWatchOutputEnabled":true, "CloudWatchLogGroupName":"/aws/ssm/presentation-deploy"}' \
@@ -49,13 +59,28 @@ jobs:
           
           # Poll for command status
           for i in {1..60}; do
-            STATUS=$(aws ssm list-command-invocations \
+            INVOCATION_COUNT=$(aws ssm list-command-invocations \
               --command-id ${{ steps.trigger.outputs.command_id }} \
-              --details \
-              --query 'CommandInvocations[0].Status' \
+              --query 'length(CommandInvocations)' \
+              --output text 2>/dev/null || echo "0")
+
+            if [ "$INVOCATION_COUNT" = "0" ] || [ "$INVOCATION_COUNT" = "None" ]; then
+              echo "No command invocations yet (attempt $i/60)." 
+              echo "Common causes: no EC2 matches tag Environment=Production, or instance is not an SSM managed instance." 
+              aws ssm list-commands \
+                --command-id ${{ steps.trigger.outputs.command_id }} \
+                --query 'Commands[0].{Status:Status,StatusDetails:StatusDetails,RequestedDateTime:RequestedDateTime,DocumentName:DocumentName,Targets:Targets}' \
+                --output yaml || true
+              sleep 10
+              continue
+            fi
+
+            STATUS=$(aws ssm list-commands \
+              --command-id ${{ steps.trigger.outputs.command_id }} \
+              --query 'Commands[0].Status' \
               --output text 2>/dev/null || echo "Pending")
-            
-            echo "Status: $STATUS (attempt $i/60)"
+
+            echo "Status: $STATUS (attempt $i/60, invocations=$INVOCATION_COUNT)"
             
             if [ "$STATUS" = "Success" ]; then
               echo "Deployment completed successfully!"
@@ -63,12 +88,19 @@ jobs:
             elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
               echo "Deployment failed with status: $STATUS"
               
-              # Get error output
+              echo "Invocation summary:"
               aws ssm list-command-invocations \
                 --command-id ${{ steps.trigger.outputs.command_id }} \
                 --details \
-                --query 'CommandInvocations[0].CommandPlugins[0].Output' \
-                --output text || true
+                --query 'CommandInvocations[].{InstanceId:InstanceId,Status:Status,StatusDetails:StatusDetails}' \
+                --output table || true
+
+              echo "Plugin output (first plugin per instance):"
+              aws ssm list-command-invocations \
+                --command-id ${{ steps.trigger.outputs.command_id }} \
+                --details \
+                --query 'CommandInvocations[].{InstanceId:InstanceId,Plugin:CommandPlugins[0].Name,ResponseCode:CommandPlugins[0].ResponseCode,Output:CommandPlugins[0].Output}' \
+                --output yaml || true
               
               exit 1
             fi
