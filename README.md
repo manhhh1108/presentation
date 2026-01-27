@@ -21,23 +21,53 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
-## CI/CD Demo
+## CI/CD Demo - GitHub Actions → EC2
 
-This repository demos CI + CD using GitHub Actions.
+This repository demonstrates a complete CI/CD pipeline using GitHub Actions to automatically deploy a Laravel application to EC2.
 
-- **CI**: runs Laravel tests and builds a static demo site.
-- **CD**: deploys the static demo site to **GitHub Pages** on every push to `main`.
+### Architecture
 
-### GitHub Pages
+**CI Workflow** (`.github/workflows/ci.yml`)
+- Runs on every push/PR
+- Executes Laravel unit tests with SQLite
+- Builds assets (Vite + static pages)
+- Creates deployment artifact
+- Uploads artifact for CD workflow
 
-The Pages site is built from the `pages/` folder using Vite (see `vite.pages.config.js`) and deployed by the workflow in `.github/workflows/cd-pages.yml`.
+**CD Workflow** (`.github/workflows/cd-ec2.yml`)
+- Triggers automatically when CI completes on `main` branch
+- Downloads deployment artifact
+- Deploys to EC2 via SSH
+- Runs migrations and optimization
+- Zero manual intervention
 
-To enable Pages in GitHub:
+### Quick Start
 
-1. Repo **Settings → Pages**
-2. **Source**: select **GitHub Actions**
+See complete demo guide: **[docs/CICD-DEMO.md](docs/CICD-DEMO.md)**
 
-After that, merge/push to `main` to trigger deployment.
+**Prerequisites:**
+1. EC2 instance with PHP 8.2+, Composer, and web server
+2. SSH key pair for deployment
+3. GitHub Secrets configured:
+   - `EC2_HOST` - EC2 public IP/DNS
+   - `EC2_USER` - SSH username (e.g., `ubuntu`)
+   - `EC2_SSH_KEY` - Private SSH key
+   - `EC2_APP_PATH` - Deploy path (e.g., `/var/www/presentation`)
+
+**To demo:**
+```bash
+# Make a change
+echo "// Update" >> routes/web.php
+
+# Push to trigger CI/CD
+git add .
+git commit -m "test: trigger deployment"
+git push origin main
+
+# Watch GitHub Actions tab for real-time progress
+```
+
+The application will automatically deploy to your EC2 instance!
 
 ## Learning Laravel
 

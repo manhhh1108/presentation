@@ -1,11 +1,21 @@
-name: CI - Laravel Tests
+name: CI - Build & Test
 
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  ci:
+  build:
+    name: Build & Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -16,15 +26,31 @@ jobs:
         with:
           php-version: '8.2'
 
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            composer-${{ runner.os }}-
+
       - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist
+        run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Setup environment
         run: |
           cp .env.example .env
           php artisan key:generate
 
+      - name: Prepare SQLite database for tests
+        run: |
+          mkdir -p database
+          touch database/database.sqlite
+
       - name: Run tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: database/database.sqlite
         run: php artisan test
 
       - name: Setup Node
@@ -36,5 +62,27 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
-      - name: Build (static pages)
+      - name: Build Laravel assets
+        run: npm run build
+
+      - name: Build static pages
         run: npm run build:pages
+
+      - name: Package deployment artifact
+        run: |
+          tar \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=node_modules \
+            --exclude=vendor \
+            --exclude=storage \
+            --exclude=.env \
+            -czf deploy.tgz .
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-package-${{ github.sha }}
+          path: deploy.tgz
+          retention-days: 7
+          if-no-files-found: error
