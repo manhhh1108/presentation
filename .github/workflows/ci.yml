@@ -62,15 +62,12 @@ jobs:
       - name: Ensure deploy folders exist (storage/vendor)
         shell: bash
         run: |
-          # Laravel cần các thư mục này để chạy (và để zip không "mất" folder rỗng)
           mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache
           touch storage/framework/cache/.gitkeep
           touch storage/framework/sessions/.gitkeep
           touch storage/framework/views/.gitkeep
           touch storage/logs/.gitkeep
           touch bootstrap/cache/.gitkeep
-
-
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4

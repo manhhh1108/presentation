@@ -94,7 +94,7 @@
                                         </div>
 
                                         <div class="pt-3 sm:pt-5 lg:pt-0">
-                                            <h2 class="text-xl font-semibold text-black dark:text-white">Documentation</h2>
+                                            <h2 class="text-xl font-semibold text-black dark:text-white">Documentation CI/CD</h2>
 
                                             <p class="mt-4 text-sm/relaxed">
                                                 Laravel has wonderful documentation covering every aspect of the framework. Whether you are a newcomer or have prior experience with Laravel, we recommend reading our documentation from beginning to end.
@@ -115,7 +115,7 @@
                                 </div>
 
                                 <div class="pt-3 sm:pt-5">
-                                    <h2 class="text-xl font-semibold text-black dark:text-white">Laracasts Manhdd</h2>
+                                    <h2 class="text-xl font-semibold text-black dark:text-white">Laracasts</h2>
 
                                     <p class="mt-4 text-sm/relaxed">
                                         Laracasts offers thousands of video tutorials on Laravel, PHP, and JavaScript development. Check them out, see for yourself, and massively level up your development skills in the process.
