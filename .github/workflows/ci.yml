@@ -1,4 +1,4 @@
-name: CI - Build & Test
+name: CI - Build, Test & Package Artifact
 
 on:
   push:
@@ -41,9 +41,12 @@ jobs:
         run: composer install --no-interaction --prefer-dist --no-progress
 
       - name: Setup environment
+        shell: bash
         run: |
-          cp .env.example .env
-          php artisan key:generate
+          if [ -f .env.example ] && [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+          php artisan key:generate --force
 
       - name: Prepare SQLite database for tests
         run: |
@@ -56,6 +59,17 @@ jobs:
           DB_DATABASE: database/database.sqlite
         run: php artisan test
 
+      - name: Ensure deploy folders exist (storage/vendor)
+        shell: bash
+        run: |
+          # Laravel cần các thư mục này để chạy (và để zip không "mất" folder rỗng)
+          mkdir -p storage/framework/{cache,sessions,views} storage/logs bootstrap/cache
+          touch storage/framework/cache/.gitkeep
+          touch storage/framework/sessions/.gitkeep
+          touch storage/framework/views/.gitkeep
+          touch storage/logs/.gitkeep
+          touch bootstrap/cache/.gitkeep
+
 
 
       - name: Configure AWS Credentials
@@ -65,13 +79,15 @@ jobs:
           aws-region: ap-northeast-1
 
       - name: Package deployment artifact
+        shell: bash
         run: |
           echo "Creating deployment package..."
+          rm -f .env
           zip -r deploy-${{ github.sha }}.zip \
-            app bootstrap config database public resources routes \
+            app bootstrap config database public resources routes storage vendor \
             composer.json composer.lock phpunit.xml \
             artisan server.js \
-            -x "*.git*" "tests/*" "node_modules/*"
+            -x "*.git*" ".github/*" "tests/*" "node_modules/*" ".env" ".env.*"
 
       - name: Upload artifact to S3
         run: |
